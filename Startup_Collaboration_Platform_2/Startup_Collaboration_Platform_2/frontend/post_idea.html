@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Post Idea — StartupCollab</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .form-container { max-width: 680px; margin: 0 auto; }
+    .form-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; }
+    .skill-hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.3rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <span class="nav-brand">⚡ StartupCollab</span>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="view_ideas.html">Ideas</a>
+      <a href="post_idea.html" class="active">Post Idea</a>
+      <a href="notifications.html">🔔</a>
+      <a href="profile.html">Profile</a>
+      <a href="#" onclick="localStorage.clear();window.location.href='index.html'">Logout</a>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <h1>🚀 Post Your Startup Idea</h1>
+      <p>Share your vision and find the right collaborators</p>
+    </div>
+
+    <div class="form-container">
+      <div class="form-card fade-in">
+        <div id="post-alert" class="alert"></div>
+
+        <div class="form-group">
+          <label>Idea Title *</label>
+          <input type="text" id="idea-title" placeholder="e.g. AI-powered study assistant"/>
+        </div>
+
+        <div class="form-group">
+          <label>Description *</label>
+          <textarea id="idea-desc" rows="5" placeholder="Describe your startup idea in detail — what problem it solves, who it's for, and how it works..."></textarea>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label>Domain *</label>
+            <select id="idea-domain">
+              <option value="">Select domain</option>
+              <option value="AI">🤖 AI</option>
+              <option value="FinTech">💳 FinTech</option>
+              <option value="HealthTech">🏥 HealthTech</option>
+              <option value="EdTech">📚 EdTech</option>
+              <option value="E-Commerce">🛒 E-Commerce</option>
+              <option value="SaaS">☁️ SaaS</option>
+              <option value="Other">🌐 Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Location</label>
+            <input type="text" id="idea-location" placeholder="e.g. Ahmedabad"/>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Required Skills *</label>
+          <input type="text" id="idea-skills" placeholder="Python, React, Machine Learning"/>
+          <div class="skill-hint">⚠️ Comma-separated. These will be used for skill matching.</div>
+        </div>
+
+        <div style="display:flex;gap:1rem;margin-top:1rem">
+          <button class="btn btn-primary" onclick="postIdea()">🚀 Post Idea</button>
+          <a href="view_ideas.html" class="btn btn-outline">Cancel</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API    = 'http://127.0.0.1:5000/api';
+    const userId = localStorage.getItem('user_id');
+    if (!userId) window.location.href = 'index.html';
+
+    function showAlert(msg, type) {
+      const el = document.getElementById('post-alert');
+      el.textContent = msg;
+      el.className = `alert alert-${type} show`;
+    }
+
+    async function postIdea() {
+      const title           = document.getElementById('idea-title').value.trim();
+      const description     = document.getElementById('idea-desc').value.trim();
+      const domain          = document.getElementById('idea-domain').value;
+      const location        = document.getElementById('idea-location').value.trim();
+      const required_skills = document.getElementById('idea-skills').value.trim();
+
+      if (!title || !description || !domain || !required_skills)
+        return showAlert('Please fill all required fields', 'error');
+
+      try {
+        const res  = await fetch(`${API}/ideas`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ founder_id: parseInt(userId), title, description, domain, required_skills, location })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          showAlert('Idea posted successfully! Redirecting...', 'success');
+          setTimeout(() => window.location.href = 'view_ideas.html', 1200);
+        } else {
+          showAlert(data.message, 'error');
+        }
+      } catch(e) { showAlert('Server error. Is Flask running?', 'error'); }
+    }
+  </script>
+</body>
+</html>

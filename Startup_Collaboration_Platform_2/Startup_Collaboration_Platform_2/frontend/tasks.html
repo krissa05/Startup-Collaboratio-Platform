@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tasks — StartupCollab</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .task-row { display:flex; align-items:center; gap:1rem; padding:0.9rem 1rem; background:var(--bg3); border-radius:8px; margin-bottom:0.6rem; flex-wrap:wrap; }
+    .task-info { flex:1; }
+    .task-info .task-title { font-weight:600; font-size:0.95rem; margin-bottom:0.2rem; }
+    .task-info .task-desc  { color:var(--text-muted); font-size:0.8rem; }
+    .task-status select { background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:0.3rem 0.6rem; color:var(--text); font-size:0.8rem; cursor:pointer; }
+    .assign-form { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem; margin-bottom:1.5rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <span class="nav-brand">⚡ StartupCollab</span>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="view_ideas.html">Ideas</a>
+      <a href="tasks.html" class="active">Tasks</a>
+      <a href="notifications.html">🔔</a>
+      <a href="profile.html">Profile</a>
+      <a href="#" onclick="localStorage.clear();window.location.href='index.html'">Logout</a>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <h1>✅ Task Management</h1>
+      <p>Assign and track tasks for your startup</p>
+    </div>
+    <div id="alert-box" class="alert"></div>
+
+    <!-- Select Idea -->
+    <div class="card" style="margin-bottom:1.5rem">
+      <div class="form-group" style="max-width:400px;margin:0">
+        <label>Select Idea</label>
+        <select id="idea-select" onchange="loadTasks()">
+          <option value="">Choose an idea...</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Assign Task Form -->
+    <div class="assign-form fade-in">
+      <h3 style="margin-bottom:1rem">➕ Assign New Task</h3>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Task Title</label>
+          <input type="text" id="task-title" placeholder="e.g. Build Login Page"/>
+        </div>
+        <div class="form-group">
+          <label>Assign To (User ID)</label>
+          <input type="number" id="task-user" placeholder="User ID"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <input type="text" id="task-desc" placeholder="Task details..."/>
+      </div>
+      <div class="form-group">
+        <label>Due Date</label>
+        <input type="date" id="task-due"/>
+      </div>
+      <button class="btn btn-primary" onclick="assignTask()">Assign Task</button>
+    </div>
+
+    <!-- Tasks List -->
+    <h3 style="margin-bottom:1rem">📋 All Tasks</h3>
+    <div id="tasks-list"><div class="loader">Select an idea to view tasks</div></div>
+  </div>
+
+  <script>
+    const API    = 'http://127.0.0.1:5000/api';
+    const userId = localStorage.getItem('user_id');
+    if (!userId) window.location.href = 'index.html';
+
+    function showAlert(msg, type) {
+      const el = document.getElementById('alert-box');
+      el.textContent = msg; el.className = `alert alert-${type} show`;
+      setTimeout(() => el.className='alert', 3000);
+    }
+
+    async function loadIdeas() {
+      try {
+        const res  = await fetch(`${API}/ideas`);
+        const data = await res.json();
+        const sel  = document.getElementById('idea-select');
+        if (data.status === 'success') {
+          data.ideas.forEach(i => {
+            const opt = document.createElement('option');
+            opt.value = i.idea_id; opt.textContent = i.title;
+            sel.appendChild(opt);
+          });
+        }
+        const params = new URLSearchParams(window.location.search);
+        const ideaId = params.get('idea');
+        if (ideaId) { sel.value = ideaId; loadTasks(); }
+      } catch(e) {}
+    }
+
+    async function loadTasks() {
+      const ideaId = document.getElementById('idea-select').value;
+      if (!ideaId) return;
+      const list = document.getElementById('tasks-list');
+      list.innerHTML = '<div class="loader pulse">Loading tasks...</div>';
+      try {
+        const res  = await fetch(`${API}/tasks/${ideaId}`);
+        const data = await res.json();
+        if (data.status === 'success' && data.tasks.length > 0) {
+          list.innerHTML = data.tasks.map(t => `
+            <div class="task-row fade-in">
+              <div class="task-info">
+                <div class="task-title">${t.task_title}</div>
+                <div class="task-desc">${t.description || ''} · 👤 ${t.assigned_to_name || 'Unassigned'} · 📅 ${t.due_date ? new Date(t.due_date).toLocaleDateString() : '—'}</div>
+              </div>
+              <div class="task-status">
+                <select onchange="updateStatus(${t.task_id}, this.value)">
+                  <option value="Pending"     ${t.status==='Pending'?'selected':''}>🔴 Pending</option>
+                  <option value="In Progress" ${t.status==='In Progress'?'selected':''}>🟡 In Progress</option>
+                  <option value="Completed"   ${t.status==='Completed'?'selected':''}>🟢 Completed</option>
+                </select>
+              </div>
+              <span class="badge ${t.status==='Completed'?'badge-green':t.status==='In Progress'?'badge-purple':'badge-red'}">${t.status}</span>
+            </div>
+          `).join('');
+        } else {
+          list.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><h3>No tasks yet</h3><p>Assign the first task above</p></div>`;
+        }
+      } catch(e) { list.innerHTML = '<div class="loader">Failed to load tasks</div>'; }
+    }
+
+    async function assignTask() {
+      const ideaId    = document.getElementById('idea-select').value;
+      const task_title = document.getElementById('task-title').value.trim();
+      const assigned_to = parseInt(document.getElementById('task-user').value);
+      const description = document.getElementById('task-desc').value.trim();
+      const due_date    = document.getElementById('task-due').value;
+      if (!ideaId || !task_title || !assigned_to) return showAlert('Please fill required fields and select an idea', 'error');
+      try {
+        const res  = await fetch(`${API}/tasks`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({idea_id: parseInt(ideaId), assigned_to, assigned_by: parseInt(userId), task_title, description, due_date}) });
+        const data = await res.json();
+        showAlert(data.message, data.status === 'success' ? 'success' : 'error');
+        if (data.status === 'success') { document.getElementById('task-title').value=''; loadTasks(); }
+      } catch(e) { showAlert('Server error', 'error'); }
+    }
+
+    async function updateStatus(taskId, status) {
+      try {
+        const res  = await fetch(`${API}/tasks/${taskId}/status`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status}) });
+        const data = await res.json();
+        showAlert(data.message, data.status === 'success' ? 'success' : 'error');
+        loadTasks();
+      } catch(e) {}
+    }
+
+    loadIdeas();
+  </script>
+</body>
+</html>

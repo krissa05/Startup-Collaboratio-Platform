@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard — StartupCollab</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .welcome-banner {
+      background: linear-gradient(135deg, rgba(108,99,255,0.2), rgba(0,212,170,0.1));
+      border: 1px solid rgba(108,99,255,0.3);
+      border-radius: var(--radius);
+      padding: 2rem;
+      margin-bottom: 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .welcome-banner h2 { font-size: 1.6rem; margin-bottom: 0.3rem; }
+    .welcome-banner p  { color: var(--text-muted); }
+    .idea-card { cursor: pointer; }
+    .idea-card .idea-title { font-family: 'Syne', sans-serif; font-size: 1.05rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .idea-card .idea-desc  { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .idea-meta { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    .idea-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.8rem; color: var(--text-muted); }
+    .quick-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }
+    .qa-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      color: var(--text);
+      display: block;
+    }
+    .qa-card:hover { border-color: var(--accent); background: rgba(108,99,255,0.08); transform: translateY(-2px); }
+    .qa-card .qa-icon { font-size: 1.8rem; margin-bottom: 0.4rem; }
+    .qa-card .qa-label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    @media (max-width: 700px) { .quick-actions { grid-template-columns: repeat(2,1fr); } .welcome-banner { flex-direction: column; gap: 1rem; } }
+  </style>
+</head>
+<body>
+  <nav>
+    <span class="nav-brand">⚡ StartupCollab</span>
+    <div class="nav-links">
+      <a href="dashboard.html" class="active">Dashboard</a>
+      <a href="view_ideas.html">Ideas</a>
+      <a href="post_idea.html">Post Idea</a>
+      <a href="search.html">Search</a>
+      <a href="notifications.html">🔔 <span class="nav-badge" id="notif-count">0</span></a>
+      <a href="profile.html">Profile</a>
+      <a href="#" onclick="logout()">Logout</a>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <!-- Welcome Banner -->
+    <div class="welcome-banner fade-in">
+      <div>
+        <h2>Welcome back, <span id="user-name">User</span> 👋</h2>
+        <p>Role: <span id="user-role" class="badge badge-purple">—</span></p>
+      </div>
+      <a href="post_idea.html" class="btn btn-primary">+ Post New Idea</a>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid-4 fade-in" id="stats-grid">
+      <div class="stat-card"><div class="stat-value" id="stat-users">—</div><div class="stat-label">Total Users</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-ideas">—</div><div class="stat-label">Active Ideas</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-collabs">—</div><div class="stat-label">Collaborations</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-tasks">—</div><div class="stat-label">Tasks Done</div></div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div style="margin: 2rem 0 1rem;"><h3>Quick Actions</h3></div>
+    <div class="quick-actions fade-in">
+      <a class="qa-card" href="view_ideas.html"><div class="qa-icon">💡</div><div class="qa-label">Browse Ideas</div></a>
+      <a class="qa-card" href="collaborate.html"><div class="qa-icon">🤝</div><div class="qa-label">Collaborate</div></a>
+      <a class="qa-card" href="tasks.html"><div class="qa-icon">✅</div><div class="qa-label">My Tasks</div></a>
+      <a class="qa-card" href="search.html"><div class="qa-icon">🔍</div><div class="qa-label">Search</div></a>
+      <a class="qa-card" href="investor.html"><div class="qa-icon">💰</div><div class="qa-label">Investors</div></a>
+      <a class="qa-card" href="notifications.html"><div class="qa-icon">🔔</div><div class="qa-label">Notifications</div></a>
+      <a class="qa-card" href="profile.html"><div class="qa-icon">👤</div><div class="qa-label">My Profile</div></a>
+      <a class="qa-card" href="admin.html"><div class="qa-icon">⚙️</div><div class="qa-label">Admin Panel</div></a>
+    </div>
+
+    <!-- Recent Ideas -->
+    <div class="section-header">
+      <h3>Recent Ideas</h3>
+      <a href="view_ideas.html" class="btn btn-outline btn-sm">View All →</a>
+    </div>
+    <div class="grid-3 fade-in" id="ideas-grid">
+      <div class="loader">Loading ideas...</div>
+    </div>
+  </div>
+
+  <script>
+    const API = 'http://127.0.0.1:5000/api';
+    const userId = localStorage.getItem('user_id');
+    const role   = localStorage.getItem('role');
+    if (!userId) window.location.href = 'index.html';
+
+    document.getElementById('user-role').textContent = role || '—';
+
+    async function init() {
+      // Load profile name
+      try {
+        const res  = await fetch(`${API}/profile/${userId}`);
+        const data = await res.json();
+        if (data.status === 'success') document.getElementById('user-name').textContent = data.profile.full_name.split(' ')[0];
+      } catch(e) {}
+
+      // Load stats
+      try {
+        const res  = await fetch(`${API}/admin/stats`);
+        const data = await res.json();
+        if (data.status === 'success') {
+          document.getElementById('stat-users').textContent   = data.stats.total_users;
+          document.getElementById('stat-ideas').textContent   = data.stats.total_ideas;
+          document.getElementById('stat-collabs').textContent = data.stats.total_collabs;
+          document.getElementById('stat-tasks').textContent   = data.stats.total_tasks_done;
+        }
+      } catch(e) {}
+
+      // Load notifications count
+      try {
+        const res  = await fetch(`${API}/notifications/${userId}`);
+        const data = await res.json();
+        if (data.status === 'success') document.getElementById('notif-count').textContent = data.unread_count;
+      } catch(e) {}
+
+      // Load recent ideas
+      try {
+        const res  = await fetch(`${API}/ideas`);
+        const data = await res.json();
+        const grid = document.getElementById('ideas-grid');
+        if (data.status === 'success' && data.ideas.length > 0) {
+          grid.innerHTML = data.ideas.slice(0,6).map(idea => `
+            <div class="card idea-card fade-in" onclick="window.location.href='idea_detail.html?id=${idea.idea_id}'">
+              <div class="idea-title">${idea.title}</div>
+              <div class="idea-desc">${idea.description || 'No description'}</div>
+              <div class="idea-meta">
+                <span class="badge badge-purple">${idea.domain || 'Other'}</span>
+                <span class="badge badge-gray">📍 ${idea.location || '—'}</span>
+              </div>
+              <div class="idea-footer">
+                <span>by ${idea.founder_name}</span>
+                <span>❤️ ${idea.likes_count || 0}</span>
+              </div>
+              <div class="progress-bar" style="margin-top:0.8rem">
+                <div class="progress-fill" style="width:${idea.progress}%"></div>
+              </div>
+            </div>
+          `).join('');
+        } else {
+          grid.innerHTML = '<div class="empty-state"><div class="empty-icon">💡</div><h3>No ideas yet</h3><p>Be the first to post one!</p></div>';
+        }
+      } catch(e) { document.getElementById('ideas-grid').innerHTML = '<div class="loader">Failed to load ideas</div>'; }
+    }
+
+    function logout() {
+      localStorage.clear();
+      window.location.href = 'index.html';
+    }
+
+    init();
+  </script>
+</body>
+</html>

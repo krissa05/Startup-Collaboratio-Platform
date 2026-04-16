@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Investor — StartupCollab</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .idea-card { cursor:default; }
+    .idea-title { font-family:'Syne',sans-serif; font-size:1.05rem; font-weight:700; margin-bottom:0.4rem; }
+    .idea-desc  { color:var(--text-muted); font-size:0.85rem; margin-bottom:0.8rem; display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden; }
+    .interest-row { display:flex;align-items:center;gap:1rem;padding:0.9rem;background:var(--bg3);border-radius:8px;margin-bottom:0.5rem;flex-wrap:wrap; }
+    .tabs { display:flex;gap:0;margin-bottom:1.5rem;background:var(--bg3);border-radius:8px;padding:4px;max-width:350px; }
+    .tab { flex:1;padding:0.5rem;text-align:center;border-radius:6px;cursor:pointer;font-size:0.875rem;font-weight:600;color:var(--text-muted);transition:all 0.2s;border:none;background:none;font-family:'Inter',sans-serif; }
+    .tab.active { background:var(--accent);color:#fff; }
+  </style>
+</head>
+<body>
+  <nav>
+    <span class="nav-brand">⚡ StartupCollab</span>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="view_ideas.html">Ideas</a>
+      <a href="investor.html" class="active">Investor</a>
+      <a href="notifications.html">🔔</a>
+      <a href="profile.html">Profile</a>
+      <a href="#" onclick="localStorage.clear();window.location.href='index.html'">Logout</a>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <h1>💰 Investor Module</h1>
+      <p>Browse startups and express investment interest</p>
+    </div>
+    <div id="alert-box" class="alert"></div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('browse')">Browse Startups</button>
+      <button class="tab" onclick="switchTab('interests')">My Interests</button>
+    </div>
+
+    <!-- Browse Tab -->
+    <div id="tab-browse">
+      <div class="grid-3" id="browse-grid"><div class="loader pulse">Loading startups...</div></div>
+    </div>
+
+    <!-- Interests Tab -->
+    <div id="tab-interests" style="display:none">
+      <div class="form-group" style="max-width:400px;margin-bottom:1.5rem">
+        <label>Select Idea to View Interests</label>
+        <select id="idea-sel" onchange="loadInterests()">
+          <option value="">Choose idea...</option>
+        </select>
+      </div>
+      <div id="interests-list"><div class="loader">Select an idea</div></div>
+    </div>
+  </div>
+
+  <!-- Interest Modal -->
+  <div class="modal-overlay" id="interest-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Express Investment Interest</h3>
+        <button class="modal-close" onclick="document.getElementById('interest-modal').classList.remove('show')">✕</button>
+      </div>
+      <input type="hidden" id="modal-idea-id"/>
+      <div class="form-group">
+        <label>Your Message to Founder</label>
+        <textarea id="interest-msg" rows="4" placeholder="Describe your investment interest, expected involvement, etc."></textarea>
+      </div>
+      <button class="btn btn-primary btn-block" onclick="expressInterest()">Express Interest 💰</button>
+    </div>
+  </div>
+
+  <script>
+    const API    = 'http://127.0.0.1:5000/api';
+    const userId = localStorage.getItem('user_id');
+    const role   = localStorage.getItem('role');
+    if (!userId) window.location.href = 'index.html';
+
+    function showAlert(msg, type) {
+      const el = document.getElementById('alert-box');
+      el.textContent = msg; el.className = `alert alert-${type} show`;
+      setTimeout(() => el.className='alert', 3000);
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='browse')||(i===1&&tab==='interests')));
+      document.getElementById('tab-browse').style.display    = tab==='browse'    ? '' : 'none';
+      document.getElementById('tab-interests').style.display = tab==='interests' ? '' : 'none';
+      if (tab === 'interests') loadIdeasForSel();
+    }
+
+    async function loadBrowse() {
+      try {
+        const res  = await fetch(`${API}/ideas`);
+        const data = await res.json();
+        const grid = document.getElementById('browse-grid');
+        if (data.status === 'success' && data.ideas.length > 0) {
+          grid.innerHTML = data.ideas.map(idea => `
+            <div class="card idea-card fade-in">
+              <div class="idea-title">${idea.title}</div>
+              <div class="idea-desc">${idea.description || ''}</div>
+              <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.8rem">
+                <span class="badge badge-purple">${idea.domain}</span>
+                <span class="badge badge-gray">📍 ${idea.location || '—'}</span>
+              </div>
+              <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.8rem">
+                👤 ${idea.founder_name} · ❤️ ${idea.likes_count} likes
+              </div>
+              <div class="progress-bar"><div class="progress-fill" style="width:${idea.progress}%"></div></div>
+              <div style="font-size:0.75rem;color:var(--text-muted);margin:0.3rem 0 0.8rem">${idea.progress}% complete</div>
+              ${role === 'Investor' ? `<button class="btn btn-primary btn-sm" onclick="openInterestModal(${idea.idea_id})">💰 Show Interest</button>` : `<a href="idea_detail.html?id=${idea.idea_id}" class="btn btn-outline btn-sm">View Details →</a>`}
+            </div>
+          `).join('');
+        } else {
+          grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">💡</div><h3>No startups found</h3></div>';
+        }
+      } catch(e) { document.getElementById('browse-grid').innerHTML = '<div class="loader">Failed to load</div>'; }
+    }
+
+    async function loadIdeasForSel() {
+      try {
+        const res  = await fetch(`${API}/ideas`);
+        const data = await res.json();
+        const sel  = document.getElementById('idea-sel');
+        sel.innerHTML = '<option value="">Choose idea...</option>';
+        if (data.status === 'success') {
+          data.ideas.forEach(i => {
+            const opt = document.createElement('option');
+            opt.value = i.idea_id; opt.textContent = i.title;
+            sel.appendChild(opt);
+          });
+        }
+      } catch(e) {}
+    }
+
+    async function loadInterests() {
+      const ideaId = document.getElementById('idea-sel').value;
+      if (!ideaId) return;
+      const list = document.getElementById('interests-list');
+      list.innerHTML = '<div class="loader pulse">Loading...</div>';
+      try {
+        const res  = await fetch(`${API}/investor/interests/${ideaId}`);
+        const data = await res.json();
+        if (data.status === 'success' && data.interests.length > 0) {
+          list.innerHTML = data.interests.map(i => `
+            <div class="interest-row fade-in">
+              <div style="flex:1">
+                <div style="font-weight:600">${i.full_name}</div>
+                <div style="font-size:0.8rem;color:var(--text-muted)">${i.email} · ${new Date(i.expressed_at).toLocaleDateString()}</div>
+                <div style="font-size:0.85rem;margin-top:0.3rem">💬 "${i.message}"</div>
+              </div>
+              <span class="badge ${i.status==='Accepted'?'badge-green':i.status==='Rejected'?'badge-red':'badge-gray'}">${i.status}</span>
+              ${i.status === 'Pending' ? `
+              <div style="display:flex;gap:0.5rem">
+                <button class="btn btn-success btn-sm" onclick="handleInterest(${i.interest_id},'Accepted')">Accept</button>
+                <button class="btn btn-danger btn-sm"  onclick="handleInterest(${i.interest_id},'Rejected')">Reject</button>
+              </div>` : ''}
+            </div>
+          `).join('');
+        } else {
+          list.innerHTML = '<div class="empty-state"><div class="empty-icon">💰</div><h3>No investor interests yet</h3></div>';
+        }
+      } catch(e) {}
+    }
+
+    function openInterestModal(ideaId) {
+      document.getElementById('modal-idea-id').value = ideaId;
+      document.getElementById('interest-modal').classList.add('show');
+    }
+
+    async function expressInterest() {
+      const idea_id    = parseInt(document.getElementById('modal-idea-id').value);
+      const message    = document.getElementById('interest-msg').value.trim();
+      if (!message) return showAlert('Please write a message', 'error');
+      try {
+        const res  = await fetch(`${API}/investor/interest`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({investor_id: parseInt(userId), idea_id, message}) });
+        const data = await res.json();
+        showAlert(data.message, data.status === 'success' ? 'success' : 'error');
+        document.getElementById('interest-modal').classList.remove('show');
+      } catch(e) { showAlert('Server error', 'error'); }
+    }
+
+    async function handleInterest(interestId, action) {
+      try {
+        const res  = await fetch(`${API}/investor/handle`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({interest_id: interestId, action}) });
+        const data = await res.json();
+        showAlert(data.message, data.status === 'success' ? 'success' : 'error');
+        loadInterests();
+      } catch(e) {}
+    }
+
+    loadBrowse();
+  </script>
+</body>
+</html>

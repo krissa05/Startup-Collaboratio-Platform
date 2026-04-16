@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Idea Detail — StartupCollab</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .idea-hero { background: linear-gradient(135deg,rgba(108,99,255,0.15),rgba(0,212,170,0.08)); border: 1px solid rgba(108,99,255,0.25); border-radius: var(--radius); padding: 2rem; margin-bottom: 1.5rem; }
+    .idea-hero h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+    .idea-hero .meta { display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0; }
+    .action-row { display: flex; gap: 0.8rem; flex-wrap: wrap; margin-top: 1rem; }
+    .team-member { display: flex; align-items: center; gap: 0.8rem; padding: 0.8rem; background: var(--bg3); border-radius: 8px; margin-bottom: 0.5rem; }
+    .avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; flex-shrink: 0; }
+    .matched-user { display: flex; align-items: center; justify-content: space-between; padding: 0.8rem; background: var(--bg3); border-radius: 8px; margin-bottom: 0.5rem; }
+    .sidebar { display: flex; flex-direction: column; gap: 1.5rem; }
+    .detail-layout { display: grid; grid-template-columns: 1fr 320px; gap: 1.5rem; }
+    @media (max-width: 800px) { .detail-layout { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <nav>
+    <span class="nav-brand">⚡ StartupCollab</span>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="view_ideas.html">Ideas</a>
+      <a href="notifications.html">🔔</a>
+      <a href="profile.html">Profile</a>
+      <a href="#" onclick="localStorage.clear();window.location.href='index.html'">Logout</a>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div id="alert-box" class="alert"></div>
+    <div id="main-content"><div class="loader pulse">Loading idea...</div></div>
+  </div>
+
+  <!-- Collab Request Modal -->
+  <div class="modal-overlay" id="collab-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Request to Collaborate</h3>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="form-group">
+        <label>Your Message</label>
+        <textarea id="collab-message" rows="4" placeholder="Tell them why you want to join and what you bring..."></textarea>
+      </div>
+      <button class="btn btn-primary btn-block" onclick="sendCollabRequest()">Send Request</button>
+    </div>
+  </div>
+
+  <!-- Rating Modal -->
+  <div class="modal-overlay" id="rating-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Rate a Team Member</h3>
+        <button class="modal-close" onclick="document.getElementById('rating-modal').classList.remove('show')">✕</button>
+      </div>
+      <div class="form-group">
+        <label>Team Member User ID</label>
+        <input type="number" id="rate-user-id" placeholder="User ID"/>
+      </div>
+      <div class="form-group">
+        <label>Score (1-5)</label>
+        <select id="rate-score">
+          <option value="5">⭐⭐⭐⭐⭐ Excellent</option>
+          <option value="4">⭐⭐⭐⭐ Good</option>
+          <option value="3">⭐⭐⭐ Average</option>
+          <option value="2">⭐⭐ Below Average</option>
+          <option value="1">⭐ Poor</option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-block" onclick="submitRating()">Submit Rating</button>
+    </div>
+  </div>
+
+  <script>
+    const API    = 'http://127.0.0.1:5000/api';
+    const userId = localStorage.getItem('user_id');
+    if (!userId) window.location.href = 'index.html';
+    const params = new URLSearchParams(window.location.search);
+    const ideaId = params.get('id');
+    let currentIdea = null;
+
+    function showAlert(msg, type) {
+      const el = document.getElementById('alert-box');
+      el.textContent = msg; el.className = `alert alert-${type} show`;
+      setTimeout(() => el.className = 'alert', 3000);
+    }
+
+    async function loadIdea() {
+      try {
+        const res  = await fetch(`${API}/ideas/${ideaId}`);
+        const data = await res.json();
+        if (data.status !== 'success') throw new Error();
+        currentIdea = data.idea;
+        render(data.idea);
+        loadMatches();
+      } catch(e) { document.getElementById('main-content').innerHTML = '<div class="loader">Failed to load idea.</div>'; }
+    }
+
+    function render(idea) {
+      const isFounder = parseInt(userId) === idea.founder_id;
+      document.getElementById('main-content').innerHTML = `
+        <div class="idea-hero fade-in">
+          <h1>${idea.title}</h1>
+          <p style="color:var(--text-muted)">${idea.description || ''}</p>
+          <div class="meta">
+            <span class="badge badge-purple">${idea.domain}</span>
+            <span class="badge badge-gray">📍 ${idea.location || '—'}</span>
+            <span class="badge badge-gray">👥 ${idea.team_size} members</span>
+            <span class="badge ${idea.status==='Active'?'badge-green':'badge-gray'}">${idea.status}</span>
+          </div>
+          <div style="margin:0.5rem 0">
+            <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.3rem">Progress: ${idea.progress}%</div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${idea.progress}%"></div></div>
+          </div>
+          <div class="tags">${(idea.required_skills||'').split(',').map(s=>`<span class="tag">${s.trim()}</span>`).join('')}</div>
+          <div class="action-row">
+            <button class="btn btn-primary" onclick="likeIdea()">❤️ Like</button>
+            <button class="btn btn-outline" onclick="saveIdea()">🔖 Save</button>
+            ${!isFounder ? `<button class="btn btn-success" onclick="document.getElementById('collab-modal').classList.add('show')">🤝 Request to Join</button>` : ''}
+            ${isFounder  ? `<a href="collaborate.html?id=${idea.idea_id}" class="btn btn-outline">📋 View Requests</a>` : ''}
+            <button class="btn btn-outline" onclick="document.getElementById('rating-modal').classList.add('show')">⭐ Rate Member</button>
+          </div>
+        </div>
+
+        <div class="detail-layout">
+          <div>
+            <div class="card fade-in">
+              <h3 style="margin-bottom:1rem">👥 Team Members</h3>
+              ${idea.team.map(m => `
+                <div class="team-member">
+                  <div class="avatar">${m.full_name[0]}</div>
+                  <div>
+                    <div style="font-weight:600">${m.full_name}</div>
+                    <div style="font-size:0.8rem;color:var(--text-muted)">${m.team_role} · ${m.user_role}</div>
+                  </div>
+                </div>
+              `).join('') || '<p style="color:var(--text-muted)">No team members yet</p>'}
+            </div>
+            ${isFounder ? `
+            <div class="card fade-in" style="margin-top:1.5rem">
+              <h3 style="margin-bottom:1rem">📋 Tasks</h3>
+              <a href="tasks.html?idea=${idea.idea_id}" class="btn btn-outline btn-sm">Manage Tasks →</a>
+            </div>` : ''}
+          </div>
+          <div class="sidebar">
+            <div class="card fade-in">
+              <h4 style="margin-bottom:0.8rem">📊 Idea Info</h4>
+              <div style="font-size:0.875rem;display:flex;flex-direction:column;gap:0.5rem">
+                <div style="display:flex;justify-content:space-between"><span style="color:var(--text-muted)">Founder</span><span>${idea.founder_name}</span></div>
+                <div style="display:flex;justify-content:space-between"><span style="color:var(--text-muted)">Domain</span><span>${idea.domain}</span></div>
+                <div style="display:flex;justify-content:space-between"><span style="color:var(--text-muted)">Likes</span><span>❤️ ${idea.likes_count}</span></div>
+                <div style="display:flex;justify-content:space-between"><span style="color:var(--text-muted)">Team Size</span><span>${idea.team_size}</span></div>
+              </div>
+            </div>
+            <div class="card fade-in" id="matches-card">
+              <h4 style="margin-bottom:0.8rem">🎯 Skill Matches</h4>
+              <div id="matches-list"><div class="pulse" style="color:var(--text-muted);font-size:0.8rem">Loading...</div></div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    async function loadMatches() {
+      try {
+        const res  = await fetch(`${API}/skills/match/${ideaId}`);
+        const data = await res.json();
+        const list = document.getElementById('matches-list');
+        if (data.status === 'success' && data.matched_users.length > 0) {
+          list.innerHTML = data.matched_users.slice(0,5).map(u => `
+            <div class="matched-user">
+              <div>
+                <div style="font-weight:600;font-size:0.875rem">${u.full_name}</div>
+                <div style="font-size:0.75rem;color:var(--text-muted)">${u.matched_skills.join(', ')}</div>
+              </div>
+              <span class="badge badge-green">${u.role}</span>
+            </div>
+          `).join('');
+        } else {
+          list.innerHTML = '<p style="font-size:0.8rem;color:var(--text-muted)">No matches found</p>';
+        }
+      } catch(e) {}
+    }
+
+    async function likeIdea() {
+      try {
+        const res  = await fetch(`${API}/ideas/${ideaId}/like`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({user_id: parseInt(userId)}) });
+        const data = await res.json();
+        showAlert(data.message, data.status === 'success' ? 'success' : 'error');
+      } catch(e) {}
+    }
+
+    async function saveIdea() {
+      try {
+        const res  = await fetch(`${API}/ideas/${ideaId}/save`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({user_id: parseInt(userId)}) });
+        const data = await res.json();
+        showAlert(data.message, data.status === 'success' ? 'success' : 'error');
+      } catch(e) {}
+    }
+
+    async function sendCollabRequest() {
+      const message = document.getElementById('collab-message').value.trim();
+      if (!message) return showAlert('Please write a message', 'error');
+      try {
+        const res  = await fetch(`${API}/collaborate/request`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({idea_id: parseInt(ideaId), sender_id: parseInt(userId), message}) });
+        const data = await res.json();
+        showAlert(data.message, data.status === 'success' ? 'success' : 'error');
+        closeModal();
+      } catch(e) {}
+    }
+
+    async function submitRating() {
+      const rated_user_id = parseInt(document.getElementById('rate-user-id').value);
+      const score         = parseInt(document.getElementById('rate-score').value);
+      try {
+        const res  = await fetch(`${API}/ratings`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({rated_user_id, rated_by: parseInt(userId), idea_id: parseInt(ideaId), score}) });
+        const data = await res.json();
+        showAlert(data.message, data.status === 'success' ? 'success' : 'error');
+        document.getElementById('rating-modal').classList.remove('show');
+      } catch(e) {}
+    }
+
+    function closeModal() { document.getElementById('collab-modal').classList.remove('show'); }
+
+    if (ideaId) loadIdea();
+    else document.getElementById('main-content').innerHTML = '<div class="loader">No idea ID provided.</div>';
+  </script>
+</body>
+</html>

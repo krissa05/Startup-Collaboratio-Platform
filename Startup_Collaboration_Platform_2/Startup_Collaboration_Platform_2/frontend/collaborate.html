@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Collaborate — StartupCollab</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .request-card { padding: 1.2rem; background: var(--bg3); border-radius: 10px; margin-bottom: 0.8rem; display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; }
+    .request-info { flex:1; }
+    .request-info .name { font-weight:600; margin-bottom:0.2rem; }
+    .request-info .msg  { color:var(--text-muted); font-size:0.85rem; }
+    .request-actions { display:flex; gap:0.5rem; flex-shrink:0; }
+    .idea-select { max-width: 400px; margin-bottom: 1.5rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <span class="nav-brand">⚡ StartupCollab</span>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="view_ideas.html">Ideas</a>
+      <a href="collaborate.html" class="active">Collaborate</a>
+      <a href="notifications.html">🔔</a>
+      <a href="profile.html">Profile</a>
+      <a href="#" onclick="localStorage.clear();window.location.href='index.html'">Logout</a>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <h1>🤝 Collaboration Requests</h1>
+      <p>Manage who joins your startup team</p>
+    </div>
+
+    <div id="alert-box" class="alert"></div>
+
+    <div class="card" style="margin-bottom:1.5rem">
+      <div class="idea-select">
+        <div class="form-group">
+          <label>Select Your Idea</label>
+          <select id="idea-select" onchange="loadRequests()">
+            <option value="">Choose an idea...</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div id="requests-list"><div class="loader">Select an idea to view requests</div></div>
+  </div>
+
+  <script>
+    const API    = 'http://127.0.0.1:5000/api';
+    const userId = localStorage.getItem('user_id');
+    if (!userId) window.location.href = 'index.html';
+
+    function showAlert(msg, type) {
+      const el = document.getElementById('alert-box');
+      el.textContent = msg; el.className = `alert alert-${type} show`;
+      setTimeout(() => el.className='alert', 3000);
+    }
+
+    async function loadIdeas() {
+      try {
+        const res  = await fetch(`${API}/ideas`);
+        const data = await res.json();
+        const sel  = document.getElementById('idea-select');
+        if (data.status === 'success') {
+          const myIdeas = data.ideas.filter(i => true); // show all for now
+          myIdeas.forEach(i => {
+            const opt = document.createElement('option');
+            opt.value = i.idea_id;
+            opt.textContent = i.title;
+            sel.appendChild(opt);
+          });
+        }
+        // Auto-select from URL param
+        const params = new URLSearchParams(window.location.search);
+        const ideaId = params.get('id');
+        if (ideaId) { sel.value = ideaId; loadRequests(); }
+      } catch(e) {}
+    }
+
+    async function loadRequests() {
+      const ideaId = document.getElementById('idea-select').value;
+      if (!ideaId) return;
+      const list = document.getElementById('requests-list');
+      list.innerHTML = '<div class="loader pulse">Loading requests...</div>';
+      try {
+        const res  = await fetch(`${API}/collaborate/requests/${ideaId}`);
+        const data = await res.json();
+        if (data.status === 'success' && data.requests.length > 0) {
+          list.innerHTML = data.requests.map(r => `
+            <div class="request-card fade-in">
+              <div class="request-info">
+                <div class="name">${r.full_name} <span class="badge badge-gray">${r.role}</span></div>
+                <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.3rem">${r.email}</div>
+                <div class="msg">💬 "${r.message}"</div>
+                <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.3rem">${new Date(r.requested_at).toLocaleDateString()}</div>
+              </div>
+              <div>
+                <span class="badge ${r.status==='Pending'?'badge-gray':r.status==='Accepted'?'badge-green':'badge-red'}" style="margin-bottom:0.5rem;display:block;text-align:center">${r.status}</span>
+                ${r.status === 'Pending' ? `
+                <div class="request-actions">
+                  <button class="btn btn-success btn-sm" onclick="handleRequest(${r.request_id},'Accepted')">✓ Accept</button>
+                  <button class="btn btn-danger btn-sm"  onclick="handleRequest(${r.request_id},'Rejected')">✕ Reject</button>
+                </div>` : ''}
+              </div>
+            </div>
+          `).join('');
+        } else {
+          list.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><h3>No requests yet</h3><p>Share your idea to get collaboration requests</p></div>`;
+        }
+      } catch(e) { list.innerHTML = '<div class="loader">Failed to load requests</div>'; }
+    }
+
+    async function handleRequest(requestId, action) {
+      try {
+        const res  = await fetch(`${API}/collaborate/handle`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({request_id: requestId, action, role: 'Team Member'}) });
+        const data = await res.json();
+        showAlert(data.message, data.status === 'success' ? 'success' : 'error');
+        loadRequests();
+      } catch(e) { showAlert('Server error', 'error'); }
+    }
+
+    loadIdeas();
+  </script>
+</body>
+</html>

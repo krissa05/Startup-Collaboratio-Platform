@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Search — StartupCollab</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .search-bar { display:flex;gap:0.8rem;margin-bottom:1.5rem;flex-wrap:wrap; }
+    .search-bar input { flex:1;min-width:200px; background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0.8rem 1rem;color:var(--text);font-size:0.95rem;outline:none;transition:border-color 0.2s; }
+    .search-bar input:focus { border-color:var(--accent); }
+    .filter-row { display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem; }
+    .filter-row select { background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0.6rem 1rem;color:var(--text);font-size:0.875rem;outline:none;cursor:pointer; }
+    .filter-row select:focus { border-color:var(--accent); }
+    .result-card { cursor:pointer; }
+    .result-title { font-family:'Syne',sans-serif;font-size:1.05rem;font-weight:700;margin-bottom:0.4rem; }
+    .result-desc  { color:var(--text-muted);font-size:0.85rem;margin-bottom:0.8rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden; }
+    .result-meta  { display:flex;gap:0.5rem;flex-wrap:wrap; }
+    .search-hint  { color:var(--text-muted);font-size:0.875rem;margin-bottom:1rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <span class="nav-brand">⚡ StartupCollab</span>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="view_ideas.html">Ideas</a>
+      <a href="search.html" class="active">Search</a>
+      <a href="notifications.html">🔔</a>
+      <a href="profile.html">Profile</a>
+      <a href="#" onclick="localStorage.clear();window.location.href='index.html'">Logout</a>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <h1>🔍 Search & Filter</h1>
+      <p>Find startups by keyword, domain, location, or skill</p>
+    </div>
+
+    <div class="search-bar">
+      <input type="text" id="search-q" placeholder="Search by title or description..." onkeydown="if(event.key==='Enter') doSearch()"/>
+      <button class="btn btn-primary" onclick="doSearch()">Search</button>
+      <button class="btn btn-outline" onclick="clearSearch()">Clear</button>
+    </div>
+
+    <div class="filter-row">
+      <select id="f-domain">
+        <option value="">All Domains</option>
+        <option value="AI">🤖 AI</option>
+        <option value="FinTech">💳 FinTech</option>
+        <option value="HealthTech">🏥 HealthTech</option>
+        <option value="EdTech">📚 EdTech</option>
+        <option value="E-Commerce">🛒 E-Commerce</option>
+        <option value="SaaS">☁️ SaaS</option>
+        <option value="Other">🌐 Other</option>
+      </select>
+      <input type="text" id="f-location" placeholder="📍 Location..." style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0.6rem 1rem;color:var(--text);font-size:0.875rem;outline:none;width:160px"/>
+      <input type="text" id="f-skill"    placeholder="🛠️ Skill..." style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0.6rem 1rem;color:var(--text);font-size:0.875rem;outline:none;width:160px"/>
+    </div>
+
+    <div class="search-hint" id="search-hint">Showing all active startups. Use filters to narrow down.</div>
+    <div class="grid-3" id="results-grid"><div class="loader pulse">Loading...</div></div>
+  </div>
+
+  <script>
+    const API    = 'http://127.0.0.1:5000/api';
+    const userId = localStorage.getItem('user_id');
+    if (!userId) window.location.href = 'index.html';
+
+    async function doSearch() {
+      const q        = document.getElementById('search-q').value.trim();
+      const domain   = document.getElementById('f-domain').value;
+      const location = document.getElementById('f-location').value.trim();
+      const skill    = document.getElementById('f-skill').value.trim();
+
+      let url = `${API}/search?`;
+      if (q)        url += `q=${encodeURIComponent(q)}&`;
+      if (domain)   url += `domain=${domain}&`;
+      if (location) url += `location=${encodeURIComponent(location)}&`;
+      if (skill)    url += `skill=${encodeURIComponent(skill)}&`;
+
+      const grid = document.getElementById('results-grid');
+      grid.innerHTML = '<div class="loader pulse">Searching...</div>';
+      try {
+        const res  = await fetch(url);
+        const data = await res.json();
+        document.getElementById('search-hint').textContent = `Found ${data.results?.length || 0} results`;
+        if (data.status === 'success' && data.results.length > 0) {
+          grid.innerHTML = data.results.map(r => `
+            <div class="card result-card fade-in" onclick="window.location.href='idea_detail.html?id=${r.idea_id}'">
+              <div class="result-title">${r.title}</div>
+              <div class="result-desc">${r.description || ''}</div>
+              <div class="result-meta">
+                <span class="badge badge-purple">${r.domain}</span>
+                <span class="badge badge-gray">📍 ${r.location || '—'}</span>
+                <span class="badge badge-gray">❤️ ${r.likes_count}</span>
+              </div>
+              <div class="tags" style="margin-top:0.6rem">
+                ${(r.required_skills||'').split(',').map(s=>`<span class="tag">${s.trim()}</span>`).join('')}
+              </div>
+              <div style="margin-top:0.8rem;font-size:0.8rem;color:var(--text-muted)">by ${r.founder_name}</div>
+            </div>
+          `).join('');
+        } else {
+          grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+            <div class="empty-icon">🔍</div>
+            <h3>No results found</h3>
+            <p>Try different keywords or filters</p>
+          </div>`;
+        }
+      } catch(e) { grid.innerHTML = '<div class="loader">Search failed. Is Flask running?</div>'; }
+    }
+
+    function clearSearch() {
+      document.getElementById('search-q').value    = '';
+      document.getElementById('f-domain').value    = '';
+      document.getElementById('f-location').value  = '';
+      document.getElementById('f-skill').value     = '';
+      doSearch();
+    }
+
+    doSearch();
+  </script>
+</body>
+</html>

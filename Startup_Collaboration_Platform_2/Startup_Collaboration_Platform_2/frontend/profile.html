@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Profile — StartupCollab</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .profile-hero { background: linear-gradient(135deg,rgba(108,99,255,0.15),rgba(0,212,170,0.08)); border: 1px solid rgba(108,99,255,0.25); border-radius: var(--radius); padding: 2rem; margin-bottom: 1.5rem; display:flex; gap:1.5rem; align-items:center; }
+    .profile-avatar { width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:700;flex-shrink:0; }
+    .profile-info h2 { font-size:1.6rem; margin-bottom:0.3rem; }
+    .profile-info p  { color:var(--text-muted); font-size:0.9rem; }
+    .profile-layout { display:grid; grid-template-columns:1fr 320px; gap:1.5rem; }
+    .rating-stars { color:#ffd700; font-size:1.2rem; }
+    @media (max-width:800px) { .profile-layout {grid-template-columns:1fr;} .profile-hero {flex-direction:column;text-align:center;} }
+  </style>
+</head>
+<body>
+  <nav>
+    <span class="nav-brand">⚡ StartupCollab</span>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="view_ideas.html">Ideas</a>
+      <a href="notifications.html">🔔</a>
+      <a href="profile.html" class="active">Profile</a>
+      <a href="#" onclick="localStorage.clear();window.location.href='index.html'">Logout</a>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div id="alert-box" class="alert"></div>
+    <div id="profile-content"><div class="loader pulse">Loading profile...</div></div>
+  </div>
+
+  <script>
+    const API    = 'http://127.0.0.1:5000/api';
+    const userId = localStorage.getItem('user_id');
+    if (!userId) window.location.href = 'index.html';
+
+    function showAlert(msg, type) {
+      const el = document.getElementById('alert-box');
+      el.textContent = msg; el.className = `alert alert-${type} show`;
+      setTimeout(() => el.className='alert', 3000);
+    }
+
+    async function loadProfile() {
+      try {
+        const res  = await fetch(`${API}/profile/${userId}`);
+        const data = await res.json();
+        if (data.status !== 'success') throw new Error();
+        const p = data.profile;
+        const stars = '⭐'.repeat(Math.round(p.avg_rating || 0));
+        document.getElementById('profile-content').innerHTML = `
+          <div class="profile-hero fade-in">
+            <div class="profile-avatar">${p.full_name[0]}</div>
+            <div class="profile-info">
+              <h2>${p.full_name}</h2>
+              <p>${p.email}</p>
+              <div style="display:flex;gap:0.5rem;margin-top:0.5rem;flex-wrap:wrap">
+                <span class="badge badge-purple">${p.role}</span>
+                <span class="badge badge-gray">📍 ${p.location || '—'}</span>
+                <span class="badge badge-gray">💼 ${p.experience || '—'}</span>
+              </div>
+              <div style="margin-top:0.5rem">
+                <span class="rating-stars">${stars || '☆☆☆☆☆'}</span>
+                <span style="color:var(--text-muted);font-size:0.8rem;margin-left:0.5rem">${p.avg_rating}/5 avg rating</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="profile-layout">
+            <div class="card fade-in">
+              <h3 style="margin-bottom:1.5rem">✏️ Edit Profile</h3>
+              <div class="form-group">
+                <label>Bio</label>
+                <textarea id="edit-bio" rows="3" placeholder="Tell us about yourself...">${p.bio || ''}</textarea>
+              </div>
+              <div class="grid-2">
+                <div class="form-group">
+                  <label>Location</label>
+                  <input type="text" id="edit-location" value="${p.location || ''}" placeholder="City, Country"/>
+                </div>
+                <div class="form-group">
+                  <label>Experience</label>
+                  <input type="text" id="edit-exp" value="${p.experience || ''}" placeholder="e.g. 2 years"/>
+                </div>
+              </div>
+              <button class="btn btn-primary" onclick="updateProfile()">Save Changes</button>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:1.5rem">
+              <div class="card fade-in">
+                <h4 style="margin-bottom:1rem">🛠️ Skills</h4>
+                ${p.skills.length > 0
+                  ? `<div class="tags">${p.skills.map(s=>`<span class="tag">${s}</span>`).join('')}</div>`
+                  : '<p style="color:var(--text-muted);font-size:0.875rem">No skills added yet</p>'}
+              </div>
+
+              <div class="card fade-in">
+                <h4 style="margin-bottom:1rem">📊 Account Info</h4>
+                <div style="font-size:0.875rem;display:flex;flex-direction:column;gap:0.6rem">
+                  <div style="display:flex;justify-content:space-between">
+                    <span style="color:var(--text-muted)">User ID</span>
+                    <span style="font-family:'Space Mono',monospace">#${p.user_id}</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between">
+                    <span style="color:var(--text-muted)">Role</span>
+                    <span>${p.role}</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between">
+                    <span style="color:var(--text-muted)">Avg Rating</span>
+                    <span>${p.avg_rating}/5</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between">
+                    <span style="color:var(--text-muted)">Member Since</span>
+                    <span>${new Date(p.created_at).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>`;
+      } catch(e) { document.getElementById('profile-content').innerHTML = '<div class="loader">Failed to load profile</div>'; }
+    }
+
+    async function updateProfile() {
+      const bio      = document.getElementById('edit-bio').value.trim();
+      const location = document.getElementById('edit-location').value.trim();
+      const experience = document.getElementById('edit-exp').value.trim();
+      try {
+        const res  = await fetch(`${API}/profile/${userId}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({bio, location, experience}) });
+        const data = await res.json();
+        showAlert(data.status === 'success' ? 'Profile updated!' : data.message, data.status === 'success' ? 'success' : 'error');
+      } catch(e) { showAlert('Server error', 'error'); }
+    }
+
+    loadProfile();
+  </script>
+</body>
+</html>

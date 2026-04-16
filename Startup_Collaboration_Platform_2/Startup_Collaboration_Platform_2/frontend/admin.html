@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Panel — StartupCollab</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .admin-tabs { display:flex;gap:0;margin-bottom:1.5rem;background:var(--bg3);border-radius:8px;padding:4px;max-width:500px; }
+    .atab { flex:1;padding:0.5rem;text-align:center;border-radius:6px;cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--text-muted);transition:all 0.2s;border:none;background:none;font-family:'Inter',sans-serif; }
+    .atab.active { background:var(--accent);color:#fff; }
+    .admin-badge { background:var(--accent3);color:#fff;font-size:0.65rem;padding:2px 7px;border-radius:6px;margin-left:6px;font-weight:700; }
+  </style>
+</head>
+<body>
+  <nav>
+    <span class="nav-brand">⚡ StartupCollab</span>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="admin.html" class="active">⚙️ Admin</a>
+      <a href="notifications.html">🔔</a>
+      <a href="#" onclick="localStorage.clear();window.location.href='index.html'">Logout</a>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <h1>⚙️ Admin Panel <span class="admin-badge">ADMIN</span></h1>
+      <p>Manage users, ideas, and platform statistics</p>
+    </div>
+    <div id="alert-box" class="alert"></div>
+
+    <!-- Stats -->
+    <div class="grid-4" id="stats-row" style="margin-bottom:2rem">
+      <div class="stat-card"><div class="stat-value" id="s-users">—</div><div class="stat-label">Total Users</div></div>
+      <div class="stat-card"><div class="stat-value" id="s-ideas">—</div><div class="stat-label">Active Ideas</div></div>
+      <div class="stat-card"><div class="stat-value" id="s-collabs">—</div><div class="stat-label">Collaborations</div></div>
+      <div class="stat-card"><div class="stat-value" id="s-tasks">—</div><div class="stat-label">Tasks Done</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="admin-tabs">
+      <button class="atab active" onclick="switchTab('users')">👥 Users</button>
+      <button class="atab" onclick="switchTab('ideas')">💡 Ideas</button>
+    </div>
+
+    <!-- Users Tab -->
+    <div id="tab-users">
+      <div class="card fade-in">
+        <h3 style="margin-bottom:1rem">All Users</h3>
+        <div style="overflow-x:auto">
+          <table id="users-table">
+            <thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Role</th><th>Location</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="users-body"><tr><td colspan="7" style="text-align:center;color:var(--text-muted)">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ideas Tab -->
+    <div id="tab-ideas" style="display:none">
+      <div class="card fade-in">
+        <h3 style="margin-bottom:1rem">All Ideas</h3>
+        <div style="overflow-x:auto">
+          <table id="ideas-table">
+            <thead><tr><th>ID</th><th>Title</th><th>Domain</th><th>Founder</th><th>Likes</th><th>Progress</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="ideas-body"><tr><td colspan="8" style="text-align:center;color:var(--text-muted)">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API    = 'http://127.0.0.1:5000/api';
+    const userId = localStorage.getItem('user_id');
+    if (!userId) window.location.href = 'index.html';
+
+    function showAlert(msg, type) {
+      const el = document.getElementById('alert-box');
+      el.textContent = msg; el.className = `alert alert-${type} show`;
+      setTimeout(() => el.className='alert', 3000);
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.atab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='users')||(i===1&&tab==='ideas')));
+      document.getElementById('tab-users').style.display = tab==='users' ? '' : 'none';
+      document.getElementById('tab-ideas').style.display = tab==='ideas' ? '' : 'none';
+      if (tab==='ideas') loadIdeas();
+    }
+
+    async function loadStats() {
+      try {
+        const res  = await fetch(`${API}/admin/stats`);
+        const data = await res.json();
+        if (data.status === 'success') {
+          document.getElementById('s-users').textContent   = data.stats.total_users;
+          document.getElementById('s-ideas').textContent   = data.stats.total_ideas;
+          document.getElementById('s-collabs').textContent = data.stats.total_collabs;
+          document.getElementById('s-tasks').textContent   = data.stats.total_tasks_done;
+        }
+      } catch(e) {}
+    }
+
+    async function loadUsers() {
+      try {
+        const res  = await fetch(`${API}/users`);
+        const data = await res.json();
+        const tbody = document.getElementById('users-body');
+        if (data.status === 'success' && data.users.length > 0) {
+          tbody.innerHTML = data.users.map(u => `
+            <tr>
+              <td style="font-family:'Space Mono',monospace">#${u.user_id}</td>
+              <td>${u.full_name}</td>
+              <td style="color:var(--text-muted)">${u.email}</td>
+              <td><span class="badge badge-purple">${u.role}</span></td>
+              <td>${u.location || '—'}</td>
+              <td><span class="badge ${u.is_active ? 'badge-green' : 'badge-red'}">${u.is_active ? 'Active' : 'Inactive'}</span></td>
+              <td>
+                ${u.is_active ? `<button class="btn btn-danger btn-sm" onclick="deactivateUser(${u.user_id})">Deactivate</button>` : '<span style="color:var(--text-muted);font-size:0.8rem">Deactivated</span>'}
+              </td>
+            </tr>
+          `).join('');
+        } else {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">No users found</td></tr>';
+        }
+      } catch(e) {}
+    }
+
+    async function loadIdeas() {
+      try {
+        const res  = await fetch(`${API}/ideas`);
+        const data = await res.json();
+        const tbody = document.getElementById('ideas-body');
+        if (data.status === 'success' && data.ideas.length > 0) {
+          tbody.innerHTML = data.ideas.map(i => `
+            <tr>
+              <td style="font-family:'Space Mono',monospace">#${i.idea_id}</td>
+              <td>${i.title}</td>
+              <td><span class="badge badge-purple">${i.domain}</span></td>
+              <td>${i.founder_name}</td>
+              <td>❤️ ${i.likes_count}</td>
+              <td>
+                <div class="progress-bar" style="width:80px">
+                  <div class="progress-fill" style="width:${i.progress}%"></div>
+                </div>
+                <span style="font-size:0.75rem;color:var(--text-muted)">${i.progress}%</span>
+              </td>
+              <td><span class="badge ${i.status==='Active'?'badge-green':'badge-gray'}">${i.status}</span></td>
+              <td><button class="btn btn-danger btn-sm" onclick="removeIdea(${i.idea_id})">Remove</button></td>
+            </tr>
+          `).join('');
+        } else {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">No ideas found</td></tr>';
+        }
+      } catch(e) {}
+    }
+
+    async function deactivateUser(uid) {
+      if (!confirm('Deactivate this user?')) return;
+      try {
+        const res  = await fetch(`${API}/users/${uid}/deactivate`, { method:'PUT' });
+        const data = await res.json();
+        showAlert(data.message, data.status === 'success' ? 'success' : 'error');
+        loadUsers();
+      } catch(e) { showAlert('Server error', 'error'); }
+    }
+
+    async function removeIdea(ideaId) {
+      if (!confirm('Remove this idea?')) return;
+      try {
+        const res  = await fetch(`${API}/ideas/${ideaId}`, { method:'DELETE' });
+        const data = await res.json();
+        showAlert(data.message, data.status === 'success' ? 'success' : 'error');
+        loadIdeas();
+      } catch(e) { showAlert('Server error', 'error'); }
+    }
+
+    loadStats();
+    loadUsers();
+  </script>
+</body>
+</html>

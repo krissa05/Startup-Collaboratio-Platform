@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Notifications — StartupCollab</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .notif-item { display:flex;align-items:flex-start;gap:1rem;padding:1rem 1.2rem;border-radius:10px;margin-bottom:0.6rem;border:1px solid var(--border);background:var(--card);transition:all 0.2s;cursor:pointer; }
+    .notif-item.unread { border-color:rgba(108,99,255,0.4);background:rgba(108,99,255,0.06); }
+    .notif-item:hover { border-color:var(--accent); }
+    .notif-icon { font-size:1.4rem;flex-shrink:0;margin-top:2px; }
+    .notif-body { flex:1; }
+    .notif-msg  { font-size:0.9rem;margin-bottom:0.2rem; }
+    .notif-time { font-size:0.75rem;color:var(--text-muted); }
+    .notif-type-badge { font-size:0.7rem; }
+    .unread-dot { width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-top:6px; }
+    .notif-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <span class="nav-brand">⚡ StartupCollab</span>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="view_ideas.html">Ideas</a>
+      <a href="notifications.html" class="active">🔔 Notifications</a>
+      <a href="profile.html">Profile</a>
+      <a href="#" onclick="localStorage.clear();window.location.href='index.html'">Logout</a>
+    </div>
+  </nav>
+
+  <div class="page-wrapper" style="max-width:700px">
+    <div class="notif-header">
+      <div>
+        <h1>🔔 Notifications</h1>
+        <p style="color:var(--text-muted)" id="unread-info">Loading...</p>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="markAllRead()">Mark All Read</button>
+    </div>
+    <div id="notif-list"><div class="loader pulse">Loading notifications...</div></div>
+  </div>
+
+  <script>
+    const API    = 'http://127.0.0.1:5000/api';
+    const userId = localStorage.getItem('user_id');
+    if (!userId) window.location.href = 'index.html';
+
+    const typeIcon = {
+      'Join Request':       '🤝',
+      'Task Assigned':      '✅',
+      'Idea Liked':         '❤️',
+      'Request Accepted':   '🎉',
+      'Request Rejected':   '❌',
+      'Investor Interest':  '💰',
+      'General':            '📢'
+    };
+
+    async function loadNotifications() {
+      try {
+        const res  = await fetch(`${API}/notifications/${userId}`);
+        const data = await res.json();
+        document.getElementById('unread-info').textContent = `${data.unread_count} unread notifications`;
+        const list = document.getElementById('notif-list');
+        if (data.status === 'success' && data.notifications.length > 0) {
+          list.innerHTML = data.notifications.map(n => `
+            <div class="notif-item ${n.is_read ? '' : 'unread'} fade-in" onclick="markRead(${n.notif_id}, this)">
+              <div class="notif-icon">${typeIcon[n.notif_type] || '📢'}</div>
+              <div class="notif-body">
+                <div class="notif-msg">${n.message}</div>
+                <div style="display:flex;gap:0.5rem;margin-top:0.3rem;align-items:center">
+                  <span class="badge badge-gray notif-type-badge">${n.notif_type}</span>
+                  <span class="notif-time">${new Date(n.created_at).toLocaleString()}</span>
+                </div>
+              </div>
+              ${!n.is_read ? '<div class="unread-dot"></div>' : ''}
+            </div>
+          `).join('');
+        } else {
+          list.innerHTML = `<div class="empty-state"><div class="empty-icon">🔔</div><h3>No notifications yet</h3><p>You're all caught up!</p></div>`;
+        }
+      } catch(e) { document.getElementById('notif-list').innerHTML = '<div class="loader">Failed to load notifications</div>'; }
+    }
+
+    async function markRead(notifId, el) {
+      try {
+        await fetch(`${API}/notifications/${notifId}/read`, { method:'PUT' });
+        el.classList.remove('unread');
+        const dot = el.querySelector('.unread-dot');
+        if (dot) dot.remove();
+        loadNotifications();
+      } catch(e) {}
+    }
+
+    async function markAllRead() {
+      const items = document.querySelectorAll('.notif-item.unread');
+      for (const item of items) {
+        const id = item.getAttribute('onclick').match(/\d+/)[0];
+        await markRead(parseInt(id), item);
+      }
+    }
+
+    loadNotifications();
+  </script>
+</body>
+</html>

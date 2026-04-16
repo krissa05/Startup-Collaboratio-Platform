@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Browse Ideas — StartupCollab</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .filter-bar {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.2rem 1.5rem;
+      display: flex;
+      gap: 1rem;
+      align-items: flex-end;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .filter-bar .form-group { margin: 0; min-width: 140px; flex: 1; }
+    .idea-card { cursor: pointer; }
+    .idea-title { font-family: 'Syne', sans-serif; font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .idea-desc  { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .idea-meta  { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+    .idea-footer { display: flex; justify-content: space-between; align-items: center; padding-top: 0.8rem; border-top: 1px solid var(--border); font-size: 0.8rem; color: var(--text-muted); }
+    .results-info { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <span class="nav-brand">⚡ StartupCollab</span>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="view_ideas.html" class="active">Ideas</a>
+      <a href="post_idea.html">Post Idea</a>
+      <a href="search.html">Search</a>
+      <a href="notifications.html">🔔</a>
+      <a href="profile.html">Profile</a>
+      <a href="#" onclick="localStorage.clear();window.location.href='index.html'">Logout</a>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div class="page-header">
+      <h1>💡 Startup Ideas</h1>
+      <p>Discover and collaborate on exciting startup ideas</p>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+      <div class="form-group">
+        <label>Domain</label>
+        <select id="filter-domain">
+          <option value="">All Domains</option>
+          <option value="AI">AI</option>
+          <option value="FinTech">FinTech</option>
+          <option value="HealthTech">HealthTech</option>
+          <option value="EdTech">EdTech</option>
+          <option value="E-Commerce">E-Commerce</option>
+          <option value="SaaS">SaaS</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Location</label>
+        <input type="text" id="filter-location" placeholder="City..."/>
+      </div>
+      <div class="form-group">
+        <label>Skill Required</label>
+        <input type="text" id="filter-skill" placeholder="e.g. Python"/>
+      </div>
+      <button class="btn btn-primary" onclick="loadIdeas()">Filter</button>
+      <button class="btn btn-outline" onclick="clearFilters()">Clear</button>
+    </div>
+
+    <div class="results-info" id="results-info"></div>
+
+    <div class="grid-3" id="ideas-grid">
+      <div class="loader">Loading ideas...</div>
+    </div>
+  </div>
+
+  <script>
+    const API    = 'http://127.0.0.1:5000/api';
+    const userId = localStorage.getItem('user_id');
+    if (!userId) window.location.href = 'index.html';
+
+    async function loadIdeas() {
+      const domain   = document.getElementById('filter-domain').value;
+      const location = document.getElementById('filter-location').value;
+      const skill    = document.getElementById('filter-skill').value;
+      let url = `${API}/ideas?`;
+      if (domain)   url += `domain=${domain}&`;
+      if (location) url += `location=${location}&`;
+      if (skill)    url += `skill=${skill}&`;
+
+      const grid = document.getElementById('ideas-grid');
+      grid.innerHTML = '<div class="loader pulse">Loading...</div>';
+      try {
+        const res  = await fetch(url);
+        const data = await res.json();
+        document.getElementById('results-info').textContent = `Showing ${data.ideas?.length || 0} ideas`;
+        if (data.status === 'success' && data.ideas.length > 0) {
+          grid.innerHTML = data.ideas.map(idea => `
+            <div class="card idea-card fade-in" onclick="window.location.href='idea_detail.html?id=${idea.idea_id}'">
+              <div class="idea-title">${idea.title}</div>
+              <div class="idea-desc">${idea.description || ''}</div>
+              <div class="idea-meta">
+                <span class="badge badge-purple">${idea.domain || 'Other'}</span>
+                <span class="badge badge-gray">📍 ${idea.location || '—'}</span>
+              </div>
+              <div class="tags">
+                ${(idea.required_skills || '').split(',').map(s => `<span class="tag">${s.trim()}</span>`).join('')}
+              </div>
+              <div class="idea-footer">
+                <span>👤 ${idea.founder_name}</span>
+                <span>❤️ ${idea.likes_count || 0} likes</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill" style="width:${idea.progress}%"></div>
+              </div>
+              <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.4rem">${idea.progress}% complete</div>
+            </div>
+          `).join('');
+        } else {
+          grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+            <div class="empty-icon">💡</div>
+            <h3>No ideas found</h3>
+            <p>Try different filters or <a href="post_idea.html">post one!</a></p>
+          </div>`;
+        }
+      } catch(e) { grid.innerHTML = '<div class="loader">Failed to load. Is Flask running?</div>'; }
+    }
+
+    function clearFilters() {
+      document.getElementById('filter-domain').value   = '';
+      document.getElementById('filter-location').value = '';
+      document.getElementById('filter-skill').value    = '';
+      loadIdeas();
+    }
+
+    loadIdeas();
+  </script>
+</body>
+</html>
